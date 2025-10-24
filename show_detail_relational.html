@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Show Details</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+body { font-family: Arial, sans-serif; margin: 40px; background-color: #fafafa; }
+h1 { text-align: center; color: #333; margin-bottom: 20px; }
+.detail-container { max-width: 800px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background-color: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+p { margin: 10px 0; line-height: 1.5; }
+.label { font-weight: bold; }
+.error { color: red; text-align: center; }
+ul { margin: 0; padding-left: 20px; }
+</style>
+</head>
+<body>
+
+<h1>Show Details</h1>
+<div id="detail" class="detail-container">Loading...</div>
+
+<script>
+const supabaseUrl = 'https://zzyrgoddigqwgjfbyimz.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp6eXJnb2RkaWdxd2dqZmJ5aW16Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEyMTg2MzksImV4cCI6MjA3Njc5NDYzOX0.cIavcOpV2lkk32gInmyHtxFvCXearkQuek3jdXl9Hns';
+const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+function getQueryParam(param) { return new URLSearchParams(window.location.search).get(param); }
+
+function displayVal(val) {
+  if(val === null || val === undefined || val === '') return 'N/A';
+  return val;
+}
+
+async function fetchShowDetail() {
+  const id = getQueryParam('id');
+  const container = document.getElementById('detail');
+
+  if(!id) { container.innerHTML = '<p class="error">Invalid show ID.</p>'; return; }
+
+  try {
+    // Fetch show main info
+    const { data: show, error: showErr } = await supabase.from('shows').select('*').eq('show_id', id).single();
+    if(showErr) throw showErr;
+
+    // Type & Platform
+    const [{ data: typeData }, { data: platformData }] = await Promise.all([
+      supabase.from('show_types').select('*').eq('type_id', show.type_id).single(),
+      supabase.from('platforms').select('*').eq('platform_id', show.platform_id).single()
+    ]);
+
+    // Genres
+    const { data: genreJunction } = await supabase.from('genres_junction').select('*').eq('show_id', id);
+    const genreIds = genreJunction.map(gj => gj.genre_id);
+    const { data: genreData } = await supabase.from('genres').select('*').in('genre_id', genreIds);
+    const genreNames = genreData.map(g => g.name);
+
+    // Average Rating
+    const { data: userRatings } = await supabase.from('user_ratings').select('rating').eq('show_id', id);
+    const avgRating = userRatings.length ? (userRatings.reduce((sum,r)=>sum+r.rating,0)/userRatings.length).toFixed(2) : 'N/A';
+
+    // Cast (contributors + people)
+    const { data: contributors } = await supabase.from('show_contributors').select('person_id,role').eq('show_id', id);
+    const personIds = contributors.map(c=>c.person_id);
+    const { data: people } = await supabase.from('people').select('person_id,name').in('person_id', personIds);
+    const peopleMap = Object.fromEntries(people.map(p=>[p.person_id,p.name]));
+    const castList = contributors.map(c=>`${peopleMap[c.person_id]||'Unknown'} (${c.role})`);
+
+    // Countries
+    const { data: showCountries } = await supabase.from('show_countries').select('country_id').eq('show_id', id);
+    const countryIds = showCountries.map(sc=>sc.country_id);
+    const { data: countries } = await supabase.from('countries').select('name,country_id').in('country_id', countryIds);
+    const countryNames = countries.map(c=>c.name);
+
+    // Render
+    container.innerHTML = `
+    <p><span class="label">Title:</span> ${displayVal(show.title)}</p>
+    <p><span class="label">Type:</span> ${displayVal(typeData?.type_name)}</p>
+    <p><span class="label">Platform:</span> ${displayVal(platformData?.name)}</p>
+    <p><span class="label">Genres:</span> ${displayVal(genreNames.join(', '))}</p>
+    <p><span class="label">Duration:</span> ${displayVal(show.duration)}</p>
+    <p><span class="label">Rating:</span> ${displayVal(avgRating)}</p>
+    <p><span class="label">Cast:</span><ul>${castList.length ? castList.map(c=>`<li>${c}</li>`).join('') : '<li>N/A</li>'}</ul></p>
+    <p><span class="label">Countries:</span> ${countryNames.length ? countryNames.join(', ') : 'N/A'}</p>
+    <p><span class="label">Content Rating:</span> ${displayVal(show.content_rating)}</p>
+    `;
+
+
+  } catch(err) {
+    console.error(err);
+    container.innerHTML = '<p class="error">Error fetching show details.</p>';
+  }
+}
+
+window.onload = fetchShowDetail;
+</script>
+
+</body>
+</html>

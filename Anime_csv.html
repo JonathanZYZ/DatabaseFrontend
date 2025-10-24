@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Anime CSV Data</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 40px;
+      background-color: #fafafa;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    table {
+      width: 95%;
+      margin: 20px auto;
+      border-collapse: collapse;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px 12px;
+      text-align: left;
+    }
+    th {
+      background-color: #f0f0f0;
+    }
+    tr:nth-child(even) {
+      background-color: #f9f9f9;
+    }
+    .error {
+      color: red;
+      text-align: center;
+    }
+    pre {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      max-width: 400px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Anime CSV Data</h1>
+
+  <table id="anime-table">
+    <thead>
+      <tr>
+        <th>Anime ID</th>
+        <th>Name</th>
+        <th>Genre</th>
+        <th>Type</th>
+        <th>Episodes</th>
+        <th>Rating</th>
+        <th>Members</th>
+      </tr>
+    </thead>
+    <tbody id="anime-body">
+      <tr><td colspan="7" style="text-align:center;">Loading...</td></tr>
+    </tbody>
+  </table>
+
+  <script>
+    // Initialize Supabase
+    const supabaseUrl = 'https://zzyrgoddigqwgjfbyimz.supabase.co';
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp6eXJnb2RkaWdxd2dqZmJ5aW16Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEyMTg2MzksImV4cCI6MjA3Njc5NDYzOX0.cIavcOpV2lkk32gInmyHtxFvCXearkQuek3jdXl9Hns';
+    const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+    // Fetch Anime CSV data
+    async function fetchAnimeCSV() {
+      const tableBody = document.getElementById('anime-body');
+      tableBody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Loading...</td></tr>';
+
+      const { data, error } = await supabase
+        .from('Anime_csv')
+        .select('*')
+        .order('anime_id', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching data:', error);
+        tableBody.innerHTML = `<tr><td colspan="7" class="error">Error loading data: ${error.message}</td></tr>`;
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center;">No data found</td></tr>`;
+        return;
+      }
+
+      // Render rows
+      tableBody.innerHTML = data.map(a => `
+        <tr>
+          <td>${a.anime_id}</td>
+          <td>${a.name ?? ''}</td>
+          <td>${a.genre ?? ''}</td>
+          <td>${a.type ?? ''}</td>
+          <td>${a.episodes ?? ''}</td>
+          <td>${a.rating ?? ''}</td>
+          <td>${a.members ?? ''}</td>
+        </tr>
+      `).join('');
+    }
+
+    window.onload = fetchAnimeCSV;
+  </script>
+</body>
+</html>

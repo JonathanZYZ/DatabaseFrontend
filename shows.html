@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Shows Table</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 40px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #f4f4f4;
+    }
+  </style>
+</head>
+<body>
+  <h1>Shows Data</h1>
+  <table id="shows-table">
+    <thead>
+      <tr>
+        <th>Show ID</th>
+        <th>Platform ID</th>
+        <th>Type ID</th>
+        <th>Title</th>
+        <th>Release Year</th>
+        <th>Content Rating</th>
+        <th>Duration</th>
+        <th>Description</th>
+        <th>Original Anime ID</th>
+        <th>Original Netflix ID</th>
+      </tr>
+    </thead>
+    <tbody id="table-body">
+      <tr><td colspan="10" style="text-align:center;">Loading...</td></tr>
+    </tbody>
+  </table>
+
+  <script>
+    // ✅ Initialize Supabase
+    const supabaseUrl = 'https://zzyrgoddigqwgjfbyimz.supabase.co';
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp6eXJnb2RkaWdxd2dqZmJ5aW16Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEyMTg2MzksImV4cCI6MjA3Njc5NDYzOX0.cIavcOpV2lkk32gInmyHtxFvCXearkQuek3jdXl9Hns';
+    const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+    // ✅ Fetch and display table data
+    async function fetchShows() {
+      const tableBody = document.getElementById('table-body');
+      tableBody.innerHTML = '<tr><td colspan="10" style="text-align:center;">Loading...</td></tr>';
+
+      const { data, error } = await supabase.from('shows').select('*');
+
+      if (error) {
+        console.error('Error fetching data:', error);
+        tableBody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:red;">Error loading data</td></tr>`;
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="10" style="text-align:center;">No data found</td></tr>`;
+        return;
+      }
+
+      // ✅ Render data into HTML table
+      tableBody.innerHTML = data.map(show => `
+        <tr>
+          <td>${show.show_id ?? ''}</td>
+          <td>${show.platform_id ?? ''}</td>
+          <td>${show.type_id ?? ''}</td>
+          <td>${show.title ?? ''}</td>
+          <td>${show.release_year ?? ''}</td>
+          <td>${show.content_rating ?? ''}</td>
+          <td>${show.duration ?? ''}</td>
+          <td>${show.description ?? ''}</td>
+          <td>${show.original_anime_id ?? ''}</td>
+          <td>${show.original_netflix_id ?? ''}</td>
+        </tr>
+      `).join('');
+    }
+
+    // ✅ Load data when page loads
+    window.onload = fetchShows;
+  </script>
+</body>
+</html>

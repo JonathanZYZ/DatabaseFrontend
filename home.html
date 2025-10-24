@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Combined Show Explorer</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  body { font-family: Arial, sans-serif; margin: 40px; background-color: #fafafa; }
+  h1 { text-align: center; color: #333; }
+  .controls { margin: 20px auto; width: 95%; display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; }
+  input, select { padding: 8px; font-size: 14px; }
+  table { width: 95%; margin: 20px auto; border-collapse: collapse; box-shadow: 0 2px 6px rgba(0,0,0,0.1); cursor: pointer; }
+  th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+  th { background-color: #f0f0f0; }
+  tr:nth-child(even) { background-color: #f9f9f9; }
+  .error { color: red; text-align: center; }
+</style>
+</head>
+<body>
+
+<h1>Combined Show Explorer</h1>
+
+<div class="controls">
+  <input type="text" id="search-input" placeholder="Search by title">
+  <select id="type-filter"><option value="">All Types</option></select>
+  <select id="genre-filter"><option value="">All Genres</option></select>
+  <select id="platform-filter"><option value="">All Platforms</option></select>
+  <input type="text" id="duration-filter" placeholder="Duration / Episodes">
+</div>
+
+<table id="shows-table">
+  <thead>
+    <tr>
+      <th data-column="title">Title</th>
+      <th data-column="type">Type</th>
+      <th data-column="genres">Genres</th>
+      <th data-column="platform">Platform</th>
+      <th data-column="duration">Duration</th>
+    </tr>
+  </thead>
+  <tbody id="shows-body">
+    <tr><td colspan="5" style="text-align:center;">Loading...</td></tr>
+  </tbody>
+</table>
+
+<script>
+const supabaseUrl = 'https://zzyrgoddigqwgjfbyimz.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp6eXJnb2RkaWdxd2dqZmJ5aW16Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEyMTg2MzksImV4cCI6MjA3Njc5NDYzOX0.cIavcOpV2lkk32gInmyHtxFvCXearkQuek3jdXl9Hns'; // replace with your key
+const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+let shows = [];
+let types = new Set();
+let genres = new Set();
+let platforms = new Set();
+let sortColumn = null;
+let sortAsc = true;
+
+async function fetchData() {
+  try {
+    const [{data: animeData}, {data: netflixData}] = await Promise.all([
+      supabase.from('Anime_csv').select('*'),
+      supabase.from('Netflix_csv').select('*')
+    ]);
+
+    const animeShows = (animeData || []).map(a => ({
+      id: a.anime_id,
+      title: a.name,
+      type: a.type || 'Anime',
+      genres: a.genre || '',
+      platform: 'Anime',
+      duration: a.episodes ? a.episodes + ' episodes' : ''
+    }));
+
+    const netflixShows = (netflixData || []).map(n => ({
+      id: n.show_id,
+      title: n.title,
+      type: n.type || '',
+      genres: n.listed_in || '',
+      platform: 'Netflix',
+      duration: n.duration || ''
+    }));
+
+    shows = [...animeShows, ...netflixShows];
+
+    // Populate filter sets
+    shows.forEach(s => {
+      if(s.type) types.add(s.type);
+      if(s.genres) s.genres.split(',').forEach(g => genres.add(g.trim()));
+      if(s.platform) platforms.add(s.platform);
+    });
+
+    populateFilters();
+    renderTable();
+
+  } catch(error) {
+    console.error(error);
+    document.getElementById('shows-body').innerHTML = `<tr><td colspan="5" class="error">Error loading data</td></tr>`;
+  }
+}
+
+function populateFilters() {
+  const typeSelect = document.getElementById('type-filter');
+  Array.from(types).sort().forEach(t => typeSelect.innerHTML += `<option value="${t}">${t}</option>`);
+
+  const genreSelect = document.getElementById('genre-filter');
+  Array.from(genres).sort().forEach(g => genreSelect.innerHTML += `<option value="${g}">${g}</option>`);
+
+  const platformSelect = document.getElementById('platform-filter');
+  Array.from(platforms).sort().forEach(p => platformSelect.innerHTML += `<option value="${p}">${p}</option>`);
+}
+
+function renderTable() {
+  const tbody = document.getElementById('shows-body');
+  let filtered = [...shows];
+
+  const search = document.getElementById('search-input').value.toLowerCase();
+  const type = document.getElementById('type-filter').value;
+  const genre = document.getElementById('genre-filter').value;
+  const platform = document.getElementById('platform-filter').value;
+  const durationFilter = document.getElementById('duration-filter').value.toLowerCase();
+
+  filtered = filtered.filter(s => s.title.toLowerCase().includes(search));
+  if(type) filtered = filtered.filter(s => s.type === type);
+  if(genre) filtered = filtered.filter(s => s.genres.includes(genre));
+  if(platform) filtered = filtered.filter(s => s.platform === platform);
+  if(durationFilter) filtered = filtered.filter(s => s.duration.toLowerCase().includes(durationFilter));
+
+  if(sortColumn) {
+    filtered.sort((a,b) => {
+      let valA = a[sortColumn] ?? '';
+      let valB = b[sortColumn] ?? '';
+      return sortAsc ? valA.toString().localeCompare(valB.toString()) : valB.toString().localeCompare(valA.toString());
+    });
+  }
+
+  if(!filtered.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">No results found</td></tr>`;
+    return;
+  }
+
+    tbody.innerHTML = filtered.map(s => `
+    <tr style="cursor:pointer;" onclick="window.location='show_detail.html?id=${s.id}&platform=${s.platform}'">
+        <td>${s.title}</td>
+        <td>${s.type}</td>
+        <td>${s.genres}</td>
+        <td>${s.platform}</td>
+        <td>${s.duration}</td>
+    </tr>
+    `).join('');
+}
+
+// Event listeners
+['search-input','type-filter','genre-filter','platform-filter','duration-filter']
+.forEach(id => document.getElementById(id).addEventListener('input', renderTable));
+
+// Sort table by clicking headers
+document.querySelectorAll('#shows-table th').forEach(th => {
+  th.addEventListener('click', () => {
+    const col = th.dataset.column;
+    if(sortColumn === col) sortAsc = !sortAsc;
+    else { sortColumn = col; sortAsc = true; }
+    renderTable();
+  });
+});
+
+window.onload = fetchData;
+</script>
+
+</body>
+</html>

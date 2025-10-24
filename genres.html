@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Genres</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 40px;
+      background-color: #fafafa;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    table {
+      width: 50%;
+      margin: 20px auto;
+      border-collapse: collapse;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 10px 15px;
+      text-align: left;
+    }
+    th {
+      background-color: #f0f0f0;
+    }
+    tr:nth-child(even) {
+      background-color: #f9f9f9;
+    }
+    .error {
+      color: red;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <h1>Genres</h1>
+
+  <table id="genres-table">
+    <thead>
+      <tr>
+        <th>Genre ID</th>
+        <th>Name</th>
+      </tr>
+    </thead>
+    <tbody id="genres-body">
+      <tr><td colspan="2" style="text-align:center;">Loading...</td></tr>
+    </tbody>
+  </table>
+
+  <script>
+    // Initialize Supabase
+    const supabaseUrl = 'https://zzyrgoddigqwgjfbyimz.supabase.co';
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp6eXJnb2RkaWdxd2dqZmJ5aW16Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEyMTg2MzksImV4cCI6MjA3Njc5NDYzOX0.cIavcOpV2lkk32gInmyHtxFvCXearkQuek3jdXl9Hns';
+    const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+    // Fetch genres
+    async function fetchGenres() {
+      const tableBody = document.getElementById('genres-body');
+      tableBody.innerHTML = '<tr><td colspan="2" style="text-align:center;">Loading...</td></tr>';
+
+      const { data, error } = await supabase
+        .from('genres')
+        .select('*')
+        .order('genre_id', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching data:', error);
+        tableBody.innerHTML = `<tr><td colspan="2" class="error">Error loading data: ${error.message}</td></tr>`;
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="2" style="text-align:center;">No data found</td></tr>`;
+        return;
+      }
+
+      tableBody.innerHTML = data.map(g => `
+        <tr>
+          <td>${g.genre_id}</td>
+          <td>${g.name}</td>
+        </tr>
+      `).join('');
+    }
+
+    window.onload = fetchGenres;
+  </script>
+</body>
+</html>

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Show Explorer (Relational, Paginated)</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  body { font-family: Arial, sans-serif; margin: 40px; background-color: #fafafa; }
+  h1 { text-align: center; color: #333; }
+  .controls { margin: 20px auto; width: 95%; display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; }
+  select, input { padding: 8px; font-size: 14px; }
+  table { width: 95%; margin: 20px auto; border-collapse: collapse; box-shadow: 0 2px 6px rgba(0,0,0,0.1); cursor: pointer; }
+  th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+  th { background-color: #f0f0f0; }
+  tr:nth-child(even) { background-color: #f9f9f9; }
+  .pagination { text-align: center; margin: 20px; }
+  .pagination button { padding: 6px 12px; margin: 0 2px; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<h1>Show Explorer (Relational, Paginated)</h1>
+
+<div class="controls">
+  <input type="text" id="search-input" placeholder="Search by title">
+  <select id="type-filter"><option value="">All Types</option></select>
+  <select id="genre-filter"><option value="">All Genres</option></select>
+  <select id="platform-filter"><option value="">All Platforms</option></select>
+  <input type="text" id="duration-filter" placeholder="Duration">
+</div>
+
+<table id="shows-table">
+  <thead>
+    <tr>
+      <th data-column="title">Title</th>
+      <th data-column="type_name">Type</th>
+      <th data-column="genres">Genres</th>
+      <th data-column="platform_name">Platform</th>
+      <th data-column="duration">Duration</th>
+    </tr>
+  </thead>
+  <tbody id="shows-body">
+    <tr><td colspan="5" style="text-align:center;">Loading...</td></tr>
+  </tbody>
+</table>
+
+<div class="pagination">
+  <button id="prev-page">Prev</button>
+  <span id="page-info">Page 1</span>
+  <button id="next-page">Next</button>
+</div>
+
+<script>
+const supabaseUrl = 'https://zzyrgoddigqwgjfbyimz.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp6eXJnb2RkaWdxd2dqZmJ5aW16Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEyMTg2MzksImV4cCI6MjA3Njc5NDYzOX0.cIavcOpV2lkk32gInmyHtxFvCXearkQuek3jdXl9Hns';
+const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+let types = [], genres = [], platforms = [];
+let currentPage = 1, pageSize = 100, totalRecords = 0;
+let sortColumn = null, sortAsc = true;
+
+async function fetchFilters() {
+  // Fetch types, platforms, genres
+  const [typeData, platformData, genreData] = await Promise.all([
+    supabase.from('show_types').select('*').order('type_name'),
+    supabase.from('platforms').select('*').order('name'),
+    supabase.from('genres').select('*').order('name')
+  ]);
+
+  types = typeData.data;
+  platforms = platformData.data;
+  genres = genreData.data.map(g => g.name);
+
+  // Populate dropdowns
+  const typeSelect = document.getElementById('type-filter');
+  types.forEach(t => typeSelect.innerHTML += `<option value="${t.type_id}">${t.type_name}</option>`);
+
+  const platformSelect = document.getElementById('platform-filter');
+  platforms.forEach(p => platformSelect.innerHTML += `<option value="${p.platform_id}">${p.name}</option>`);
+
+  const genreSelect = document.getElementById('genre-filter');
+  genres.forEach(g => genreSelect.innerHTML += `<option value="${g}">${g}</option>`);
+}
+
+
+function buildFilterQuery() {
+  const filters = {};
+  const search = document.getElementById('search-input').value.trim();
+  const type = document.getElementById('type-filter').value;
+  const genre = document.getElementById('genre-filter').value;
+  const platform = document.getElementById('platform-filter').value;
+  const duration = document.getElementById('duration-filter').value.trim();
+
+  if(search) filters.search = search;
+  if(type) filters.type = parseInt(type);
+  if(platform) filters.platform = parseInt(platform);
+  if(genre) filters.genre = genre;
+  if(duration) filters.duration = duration;
+  return filters;
+}
+
+async function fetchShows() {
+  const tbody = document.getElementById('shows-body');
+  tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">Loading...</td></tr>`;
+
+  const filters = buildFilterQuery();
+  let showQuery = supabase.from('shows').select('*', { count: 'exact' });
+
+  // Apply search, type, platform, duration filters
+  if(filters.search) showQuery = showQuery.ilike('title', `%${filters.search}%`);
+  if(filters.type) showQuery = showQuery.eq('type_id', filters.type);
+  if(filters.platform) showQuery = showQuery.eq('platform_id', filters.platform);
+  if(filters.duration) showQuery = showQuery.ilike('duration', `%${filters.duration}%`);
+
+  // --- GENRE FILTER ---
+  if(filters.genre) {
+    // Find genre_id for selected genre
+    const { data: genreData, error: genreErr } = await supabase
+      .from('genres')
+      .select('genre_id')
+      .eq('name', filters.genre)
+      .single();
+    if(genreErr) { console.error(genreErr); }
+
+    if(genreData) {
+      const { data: genreJunction } = await supabase
+        .from('genres_junction')
+        .select('show_id')
+        .eq('genre_id', genreData.genre_id);
+      const genreShowIds = genreJunction.map(gj => gj.show_id);
+      if(genreShowIds.length > 0) {
+        showQuery = showQuery.in('show_id', genreShowIds);
+      } else {
+        // If no shows match genre, return empty
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">No results found</td></tr>`;
+        totalRecords = 0;
+        return;
+      }
+    }
+  }
+
+  // Pagination
+  const from = (currentPage-1)*pageSize;
+  const to = from + pageSize -1;
+  showQuery = showQuery.range(from, to);
+
+  const { data: showData, count, error } = await showQuery;
+  totalRecords = count || 0;
+
+  if(error) {
+    console.error(error);
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">Error loading data</td></tr>`;
+    return;
+  }
+
+  if(showData.length===0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">No results found</td></tr>`;
+    return;
+  }
+
+  // Fetch related maps (types, platforms, genres junction)
+  const [typeData, platformData, genreJunctionAll, genreAllData] = await Promise.all([
+    supabase.from('show_types').select('*'),
+    supabase.from('platforms').select('*'),
+    supabase.from('genres_junction').select('*').in('show_id', showData.map(s=>s.show_id)),
+    supabase.from('genres').select('*')
+  ]);
+
+  const typeMap = Object.fromEntries(typeData.data.map(t=>[t.type_id,t.type_name]));
+  const platformMap = Object.fromEntries(platformData.data.map(p=>[p.platform_id,p.name]));
+  const genreMap = Object.fromEntries(genreAllData.data.map(g=>[g.genre_id,g.name]));
+
+  const showGenres = {};
+  genreJunctionAll.data.forEach(gj=>{
+    if(!showGenres[gj.show_id]) showGenres[gj.show_id]=[];
+    showGenres[gj.show_id].push(genreMap[gj.genre_id]);
+  });
+
+  tbody.innerHTML = showData.map(s=>`
+    <tr style="cursor:pointer;" onclick="window.location='show_detail_relational.html?id=${s.show_id}'">
+      <td>${s.title}</td>
+      <td>${typeMap[s.type_id]||''}</td>
+      <td>${(showGenres[s.show_id]||[]).join(', ')}</td>
+      <td>${platformMap[s.platform_id]||''}</td>
+      <td>${s.duration||''}</td>
+    </tr>
+  `).join('');
+
+  document.getElementById('page-info').innerText = `Page ${currentPage} of ${Math.ceil(totalRecords/pageSize)}`;
+}
+
+
+// Pagination buttons
+document.getElementById('prev-page').addEventListener('click', () => {
+  if(currentPage>1){ currentPage--; fetchShows(); }
+});
+document.getElementById('next-page').addEventListener('click', () => {
+  if(currentPage*pageSize<totalRecords){ currentPage++; fetchShows(); }
+});
+
+// Filters
+['search-input','type-filter','genre-filter','platform-filter','duration-filter'].forEach(id=>{
+  document.getElementById(id).addEventListener('input',()=>{ currentPage=1; fetchShows(); });
+});
+
+window.onload = async () => { await fetchFilters(); fetchShows(); };
+</script>
+
+</body>
+</html>

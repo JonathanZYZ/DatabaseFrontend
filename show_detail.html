@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Show Details</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  body { font-family: Arial, sans-serif; margin: 40px; background-color: #fafafa; }
+  h1 { text-align: center; color: #333; margin-bottom: 20px; }
+  .detail-container { max-width: 800px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background-color: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  p { margin: 10px 0; line-height: 1.5; }
+  .label { font-weight: bold; }
+  .error { color: red; text-align: center; }
+</style>
+</head>
+<body>
+
+<h1>Show Details</h1>
+<div id="detail" class="detail-container">Loading...</div>
+
+<script>
+const supabaseUrl = 'https://zzyrgoddigqwgjfbyimz.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp6eXJnb2RkaWdxd2dqZmJ5aW16Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEyMTg2MzksImV4cCI6MjA3Njc5NDYzOX0.cIavcOpV2lkk32gInmyHtxFvCXearkQuek3jdXl9Hns'; // replace
+const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+function getQueryParam(param) {
+  return new URLSearchParams(window.location.search).get(param);
+}
+
+async function fetchShowDetail() {
+  const id = getQueryParam('id');
+  const platform = getQueryParam('platform');
+  const container = document.getElementById('detail');
+
+  if(!id || !platform) {
+    container.innerHTML = '<p class="error">Invalid show ID or platform.</p>';
+    return;
+  }
+
+  let data;
+  try {
+    if(platform === 'Anime') {
+      const { data: animeData, error } = await supabase.from('Anime_csv').select('*').eq('anime_id', id).single();
+      if(error) throw error;
+      data = animeData;
+      container.innerHTML = `
+        <p><span class="label">Title:</span> ${data.name}</p>
+        <p><span class="label">Type:</span> ${data.type || ''}</p>
+        <p><span class="label">Genres:</span> ${data.genre || ''}</p>
+        <p><span class="label">Episodes:</span> ${data.episodes || ''}</p>
+        <p><span class="label">Rating:</span> ${data.rating || ''}</p>
+        <p><span class="label">Members:</span> ${data.members || ''}</p>
+      `;
+    } else if(platform === 'Netflix') {
+      const { data: netflixData, error } = await supabase.from('Netflix_csv').select('*').eq('show_id', id).single();
+      if(error) throw error;
+      data = netflixData;
+      container.innerHTML = `
+        <p><span class="label">Title:</span> ${data.title}</p>
+        <p><span class="label">Type:</span> ${data.type || ''}</p>
+        <p><span class="label">Genres:</span> ${data.listed_in || ''}</p>
+        <p><span class="label">Duration:</span> ${data.duration || ''}</p>
+        <p><span class="label">Rating:</span> ${data.rating || ''}</p>
+        <p><span class="label">Country:</span> ${data.country || ''}</p>
+        <p><span class="label">Director:</span> ${data.director || ''}</p>
+        <p><span class="label">Cast:</span> ${data.cast || ''}</p>
+        <p><span class="label">Description:</span> ${data.description || ''}</p>
+        <p><span class="label">Date Added:</span> ${data.date_added || ''}</p>
+        <p><span class="label">Release Year:</span> ${data.release_year || ''}</p>
+      `;
+    } else {
+      container.innerHTML = '<p class="error">Unknown platform.</p>';
+    }
+  } catch(err) {
+    console.error(err);
+    container.innerHTML = '<p class="error">Error fetching show details.</p>';
+  }
+}
+
+window.onload = fetchShowDetail;
+</script>
+
+</body>
+</html>
